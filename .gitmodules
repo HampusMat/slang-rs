@@ -1,3 +1,3 @@
 [submodule "slang"]
-	path = slang
+	path = slang-sys/slang
 	url = https://github.com/shader-slang/slang
