@@ -12,6 +12,9 @@ fn main() {
 	println!("cargo:rerun-if-env-changed=SLANG_INCLUDE_DIR");
 	println!("cargo:rerun-if-env-changed=SLANG_LIB_DIR");
 	println!("cargo:rerun-if-env-changed=VULKAN_SDK");
+	println!("cargo:rerun-if-changed=build.rs");
+
+	let out_dir = env::var("OUT_DIR").expect("Output directory environment variable is not set");
 
 	let include_dir = if let Ok(dir) = env::var("SLANG_INCLUDE_DIR") {
 		dir
@@ -19,6 +22,8 @@ fn main() {
 		format!("{dir}/include")
 	} else if let Ok(dir) = env::var("VULKAN_SDK") {
 		format!("{dir}/include/slang")
+	} else if cfg!(feature = "static") {
+		format!("{out_dir}/slang_build/Release/include")
 	} else {
 		panic!("The environment variable SLANG_INCLUDE_DIR, SLANG_DIR, or VULKAN_SDK must be set");
 	};
@@ -29,6 +34,8 @@ fn main() {
 		format!("{dir}/lib")
 	} else if let Ok(dir) = env::var("VULKAN_SDK") {
 		format!("{dir}/lib")
+	} else if cfg!(feature = "static") {
+		format!("{out_dir}/slang_build/Release/lib",)
 	} else {
 		panic!("The environment variable SLANG_LIB_DIR, SLANG_DIR, or VULKAN_SDK must be set");
 	};
@@ -43,12 +50,93 @@ fn main() {
 	}
 	#[cfg(feature = "static")]
 	{
+		use std::fs::create_dir;
 		use std::path::Path;
-		let Ok(external_lib_dir) = env::var("SLANG_EXTERNAL_DIR") else {
-			panic!(
-				"The environment variable SLANG_EXTERNAL_DIR must be set: typically set to '<slang_source_directory>/build/external'"
+		use std::path::PathBuf;
+		use std::process::Command;
+
+		let slang_build_dir = Path::new(&out_dir).join("slang_build");
+
+		if !slang_build_dir
+			.join("Release/lib/libslang-compiler.a")
+			.try_exists()
+			.unwrap()
+		{
+			use std::fs::File;
+
+			let cargo_manifest_dir = PathBuf::from(
+				env::var("CARGO_MANIFEST_DIR")
+					.expect("Cargo manifest directory environment variable is not set"),
 			);
+
+			if !slang_build_dir.try_exists().unwrap() {
+				create_dir(&slang_build_dir).unwrap();
+			}
+
+			let configure_command_output = Command::new("cmake")
+				.current_dir(&cargo_manifest_dir.join("slang"))
+				.args([
+					"--preset",
+					"default",
+					"-B",
+					slang_build_dir.to_str().unwrap(),
+					"-DSLANG_LIB_TYPE=STATIC",
+					"-DSLANG_ENABLE_TESTS=FALSE",
+					"-DSLANG_ENABLE_EXAMPLES=FALSE",
+					"-DSLANG_ENABLE_RELEASE_DEBUG_INFO=FALSE",
+					"-DSLANG_SLANG_LLVM_FLAVOR=DISABLE",
+					"-DSLANG_ENABLE_SLANGD=FALSE",
+					// "-DSLANG_ENABLE_SLANGC=FALSE",
+					"-DSLANG_ENABLE_SLANGI=FALSE",
+					"-DSLANG_ENABLE_GFX=FALSE",
+					"-DSLANG_ENABLE_SLANG_RHI=FALSE",
+				])
+				.output()
+				.unwrap();
+
+			if !configure_command_output.status.success() {
+				println!(
+					"cargo::error={}",
+					String::from_utf8(configure_command_output.stdout).unwrap()
+				);
+				println!(
+					"cargo::error={}",
+					String::from_utf8(configure_command_output.stderr).unwrap()
+				);
+				return;
+			}
+
+			let build_command_status = Command::new("cmake")
+				.current_dir(&cargo_manifest_dir.join("slang"))
+				.args([
+					"--build",
+					slang_build_dir.to_str().unwrap(),
+					"--config",
+					"Release",
+				])
+				.stdout(
+					File::create(Path::new(&out_dir).join("slang_build_command_stdout")).unwrap(),
+				)
+				.stderr(
+					File::create(Path::new(&out_dir).join("slang_build_command_stderr")).unwrap(),
+				)
+				.spawn()
+				.unwrap()
+				.wait()
+				.unwrap();
+
+			if !build_command_status.success() {
+				println!("cargo::error=Build command exited with status {build_command_status}");
+				return;
+			}
+		}
+
+		let external_lib_dir = if let Ok(external_lib_dir) = env::var("SLANG_EXTERNAL_DIR") {
+			external_lib_dir
+		} else {
+			format!("{out_dir}/slang_build/external",)
 		};
+
 		let miniz_lib_dir = Path::new(&external_lib_dir).join("miniz/Release/");
 		let lz4_lib_dir = Path::new(&external_lib_dir).join("lz4/build/cmake/Release/");
 
@@ -58,7 +146,7 @@ fn main() {
 		println!("cargo:rustc-link-search=native={}", lz4_lib_dir.display());
 
 		// Link the core Slang static libraries
-		println!("cargo:rustc-link-lib=static=slang");
+		println!("cargo:rustc-link-lib=static=slang-compiler");
 		println!("cargo:rustc-link-lib=static=compiler-core");
 		println!("cargo:rustc-link-lib=static=core");
 		// External slang dependencies
@@ -86,8 +174,6 @@ fn main() {
 			println!("cargo:rustc-link-lib=stdc++");
 		}
 	}
-
-	let out_dir = env::var("OUT_DIR").expect("Couldn't determine output directory.");
 
 	bindgen::builder()
 		.header(format!("{include_dir}/slang.h").as_str())
