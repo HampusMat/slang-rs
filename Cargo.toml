@@ -6,9 +6,13 @@ description = "Rust bindings for the Slang shader language compiler"
 repository = "https://github.com/FloatyMonkey/slang-rs"
 license = "MIT OR Apache-2.0"
 categories = ["compilers", "api-bindings"]
+links = "crate-shader-slang"
 
 [dependencies]
 shader-slang-sys = { path = "slang-sys", version = "0.1.0" }
+
+[build-dependencies]
+build-rs = "0.3.4"
 
 [features]
 serde = ["shader-slang-sys/serde"]
