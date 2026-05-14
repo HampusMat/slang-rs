@@ -2,12 +2,13 @@ extern crate bindgen;
 
 use std::{
 	env,
+	fs::read_link,
 	path::{Path, PathBuf},
 };
 
 use build_rs::{
 	input::{cargo_cfg_target_arch, cargo_cfg_target_os, out_dir},
-	output::{rerun_if_changed, rustc_link_search_kind},
+	output::{metadata, rerun_if_changed, rustc_link_search_kind},
 };
 use flate2::read::GzDecoder;
 use tar::Archive as TarArchive;
@@ -24,6 +25,12 @@ fn main() {
 	println!("cargo:rerun-if-env-changed=VULKAN_SDK");
 
 	rerun_if_changed("build.rs");
+
+	let target_os = cargo_cfg_target_os();
+
+	if target_os != "linux" && target_os != "windows" && target_os != "macos" {
+		panic!("Unsupported target OS '{target_os}'");
+	}
 
 	let slang_lib_release_extract_dir = out_dir().join("slang-lib-release");
 
@@ -95,6 +102,51 @@ fn main() {
 		.expect("Couldn't generate bindings.")
 		.write_to_file(out_dir().join("bindings.rs"))
 		.expect("Couldn't write bindings.");
+
+	let (real_lib_dir, shared_lib_file_ext) = if target_os == "linux" {
+		(dirs.lib_dir, "so")
+	} else if target_os == "macos" {
+		(dirs.lib_dir, "dylib")
+	} else if target_os == "windows" {
+		(dirs.lib_dir.parent().unwrap().join("bin"), "dll")
+	} else {
+		unreachable!()
+	};
+
+	metadata(
+		"shared_libs",
+		&real_lib_dir
+			.read_dir()
+			.unwrap()
+			.filter_map(|entry| {
+				let entry = entry.unwrap();
+
+				if entry.file_name() == "libslang.so"
+					|| entry
+						.path()
+						.extension()
+						.is_none_or(|ext| ext != shared_lib_file_ext)
+				{
+					return None;
+				}
+
+				let shared_lib_path = if entry.path().is_symlink() {
+					let linked_path = read_link(entry.path()).unwrap();
+
+					if linked_path.is_absolute() {
+						linked_path
+					} else {
+						real_lib_dir.join(linked_path)
+					}
+				} else {
+					entry.path()
+				};
+
+				Some(shared_lib_path.to_str().unwrap().to_owned())
+			})
+			.collect::<Vec<_>>()
+			.join(";"),
+	);
 }
 
 #[derive(Debug)]
