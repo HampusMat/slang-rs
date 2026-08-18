@@ -1,5 +1,5 @@
-use super::{Generic, Type, UserAttribute, rcall};
-use crate::{GlobalSession, Interface, Modifier, ModifierID, succeeded, sys};
+use super::{rcall, Generic, Type, UserAttribute};
+use crate::{succeeded, sys, GlobalSession, Interface, Modifier, ModifierID};
 
 #[repr(transparent)]
 pub struct Variable(sys::SlangReflectionVariable);
@@ -14,7 +14,7 @@ impl Variable {
 	}
 
 	pub fn find_modifier(&self, id: ModifierID) -> Option<&Modifier> {
-		rcall!(spReflectionVariable_FindModifier(self, id) as Option<&Modifier>)
+		rcall!(spReflectionVariable_FindModifier(self, id as u32) as Option<&Modifier>)
 	}
 
 	pub fn user_attribute_count(&self) -> u32 {
@@ -49,7 +49,11 @@ impl Variable {
 	pub fn default_value_int(&self) -> Option<i64> {
 		let mut value = 0;
 		let result = rcall!(spReflectionVariable_GetDefaultValueInt(self, &mut value));
-		if succeeded(result) { Some(value) } else { None }
+		if succeeded(result) {
+			Some(value)
+		} else {
+			None
+		}
 	}
 
 	pub fn generic_container(&self) -> Option<&Generic> {

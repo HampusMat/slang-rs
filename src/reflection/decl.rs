@@ -1,5 +1,5 @@
-use super::{Function, Generic, Type, Variable, rcall};
-use crate::{DeclKind, sys};
+use super::{rcall, Function, Generic, Type, Variable};
+use crate::{sys, DeclKind};
 
 #[repr(transparent)]
 pub struct Decl(sys::SlangReflectionDecl);
@@ -11,7 +11,7 @@ impl Decl {
 	}
 
 	pub fn kind(&self) -> DeclKind {
-		rcall!(spReflectionDecl_getKind(self))
+		DeclKind::from_raw(rcall!(spReflectionDecl_getKind(self)))
 	}
 
 	pub fn child_count(&self) -> u32 {

@@ -1,5 +1,5 @@
-use super::{Decl, Type, Variable, rcall};
-use crate::{DeclKind, sys};
+use super::{rcall, Decl, Type, Variable};
+use crate::{reflection::Wrapper, sys, DeclKind};
 
 #[repr(transparent)]
 pub struct Generic(sys::SlangReflectionGeneric);
@@ -61,7 +61,7 @@ impl Generic {
 	}
 
 	pub fn inner_kind(&self) -> DeclKind {
-		rcall!(spReflectionGeneric_GetInnerKind(self))
+		DeclKind::from_raw(rcall!(spReflectionGeneric_GetInnerKind(self)))
 	}
 
 	pub fn outer_generic_container(&self) -> Option<&Generic> {
@@ -87,5 +87,38 @@ impl Generic {
 			spReflectionGeneric_applySpecializations(self, generic as *const _ as *mut _)
 				as Option<&Generic>
 		)
+	}
+}
+
+#[non_exhaustive]
+pub enum GenericArgument<'a> {
+	Type(&'a mut Type),
+	Int(i64),
+	Bool(bool),
+}
+
+impl GenericArgument<'_> {
+	pub(crate) fn into_raw(
+		self,
+	) -> (
+		sys::SlangReflectionGenericArgType,
+		sys::SlangReflectionGenericArg,
+	) {
+		match self {
+			Self::Type(ty) => (
+				sys::SlangReflectionGenericArgType_SlangGenericArgType,
+				sys::SlangReflectionGenericArg {
+					typeVal: (&raw mut *ty).cast::<<Type as Wrapper>::SysType>(),
+				},
+			),
+			Self::Int(num) => (
+				sys::SlangReflectionGenericArgType_SlangGenericArgInt,
+				sys::SlangReflectionGenericArg { intVal: num },
+			),
+			Self::Bool(value) => (
+				sys::SlangReflectionGenericArgType_SlangGenericArgBool,
+				sys::SlangReflectionGenericArg { boolVal: value },
+			),
+		}
 	}
 }

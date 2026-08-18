@@ -22,7 +22,7 @@ pub use user_attribute::UserAttribute;
 pub use variable::Variable;
 pub use variable_layout::VariableLayout;
 
-use super::{Modifier, sys};
+use super::{sys, Modifier};
 
 pub fn compute_string_hash(string: &str) -> u32 {
 	rcall!(spComputeStringHash(string, string.len()))

@@ -1,5 +1,5 @@
-use super::{Type, TypeLayout, Variable, rcall};
-use crate::{ImageFormat, Modifier, ModifierID, ParameterCategory, Stage, sys};
+use super::{rcall, Type, TypeLayout, Variable};
+use crate::{sys, ImageFormat, Modifier, ModifierID, ParameterCategory, Stage};
 
 #[repr(transparent)]
 pub struct VariableLayout(sys::SlangReflectionVariableLayout);
@@ -38,7 +38,10 @@ impl VariableLayout {
 	}
 
 	pub fn offset(&self, category: ParameterCategory) -> usize {
-		rcall!(spReflectionVariableLayout_GetOffset(self, category))
+		rcall!(spReflectionVariableLayout_GetOffset(
+			self,
+			category.into_raw()
+		))
 	}
 
 	pub fn ty(&self) -> Option<&Type> {
@@ -54,11 +57,14 @@ impl VariableLayout {
 	}
 
 	pub fn binding_space_with_category(&self, category: ParameterCategory) -> usize {
-		rcall!(spReflectionVariableLayout_GetSpace(self, category))
+		rcall!(spReflectionVariableLayout_GetSpace(
+			self,
+			category.into_raw()
+		))
 	}
 
 	pub fn image_format(&self) -> ImageFormat {
-		rcall!(spReflectionVariableLayout_GetImageFormat(self))
+		ImageFormat::from_raw(rcall!(spReflectionVariableLayout_GetImageFormat(self)))
 	}
 
 	pub fn semantic_name(&self) -> Option<&str> {
@@ -70,7 +76,7 @@ impl VariableLayout {
 	}
 
 	pub fn stage(&self) -> Stage {
-		rcall!(spReflectionVariableLayout_getStage(self))
+		Stage::from_raw(rcall!(spReflectionVariableLayout_getStage(self)))
 	}
 
 	pub fn pending_data_layout(&self) -> Option<&VariableLayout> {
