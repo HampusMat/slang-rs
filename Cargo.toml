@@ -9,9 +9,11 @@ categories = ["compilers", "api-bindings"]
 
 [dependencies]
 shader-slang-sys = { path = "slang-sys", version = "0.1.0" }
+bitflags = "2.13.1"
+serde = { version = "1", features = ["derive"], optional = true }
 
 [features]
-serde = ["shader-slang-sys/serde"]
+serde = ["dep:serde"]
 
 [workspace]
 members = [

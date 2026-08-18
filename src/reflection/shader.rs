@@ -1,7 +1,8 @@
 use super::{
-	EntryPoint, Function, Generic, Type, TypeLayout, TypeParameter, Variable, VariableLayout, rcall,
+	rcall, EntryPoint, Function, Generic, Type, TypeLayout, TypeParameter, Variable, VariableLayout,
 };
-use crate::{GenericArg, GenericArgType, LayoutRules, sys};
+use crate::reflection::generic::GenericArgument;
+use crate::{sys, LayoutRules};
 
 #[repr(transparent)]
 pub struct Shader(sys::SlangReflection);
@@ -89,7 +90,7 @@ impl Shader {
 
 	pub fn type_layout(&self, ty: &Type, rules: LayoutRules) -> Option<&TypeLayout> {
 		rcall!(
-			spReflection_GetTypeLayout(self, ty as *const _ as *mut _, rules)
+			spReflection_GetTypeLayout(self, ty as *const _ as *mut _, rules as u32)
 				as Option<&TypeLayout>
 		)
 	}
@@ -104,18 +105,22 @@ impl Shader {
 		) as Option<&Type>)
 	}
 
-	pub fn specialize_generic(
+	pub fn specialize_generic<'args>(
 		&self,
 		generic: &Generic,
-		specialization_arg_types: &[GenericArgType],
-		specialization_arg_vals: &[GenericArg],
+		args: impl IntoIterator<Item = GenericArgument<'args>>,
 	) -> Option<&Generic> {
+		let (arg_types, arg_values) = args
+			.into_iter()
+			.map(|argument| argument.into_raw())
+			.unzip::<_, _, Vec<_>, Vec<_>>();
+
 		rcall!(spReflection_specializeGeneric(
 			self,
 			generic as *const _ as *mut _,
-			specialization_arg_types.len() as i64,
-			specialization_arg_types.as_ptr() as *mut _,
-			specialization_arg_vals.as_ptr() as *mut _,
+			arg_values.len() as i64,
+			arg_types.as_ptr(),
+			arg_values.as_ptr(),
 			std::ptr::null_mut()
 		) as Option<&Generic>)
 	}

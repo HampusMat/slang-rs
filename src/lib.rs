@@ -9,21 +9,14 @@ use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 use std::ptr::{null, null_mut};
 
+use bitflags::bitflags;
 pub(crate) use shader_slang_sys as sys;
-
-pub use sys::{
-	SlangBindingType as BindingType, SlangCompileTarget as CompileTarget,
-	SlangDebugInfoLevel as DebugInfoLevel, SlangDeclKind as DeclKind,
-	SlangFloatingPointMode as FloatingPointMode, SlangImageFormat as ImageFormat,
-	SlangLayoutRules as LayoutRules, SlangLineDirectiveMode as LineDirectiveMode,
-	SlangMatrixLayoutMode as MatrixLayoutMode, SlangModifierID as ModifierID,
-	SlangOptimizationLevel as OptimizationLevel, SlangParameterCategory as ParameterCategory,
-	SlangReflectionGenericArg as GenericArg, SlangReflectionGenericArgType as GenericArgType,
-	SlangResourceAccess as ResourceAccess, SlangResourceShape as ResourceShape,
-	SlangScalarType as ScalarType, SlangSourceLanguage as SourceLanguage, SlangStage as Stage,
-	SlangTypeKind as TypeKind, SlangUUID as UUID, slang_CompilerOptionName as CompilerOptionName,
-	slang_Modifier as Modifier,
+use sys::{
+	slang_CompilerOptionName as CompilerOptionName,
+	slang_CompilerOptionValueKind as CompilerOptionValueKind,
 };
+
+pub use sys::{slang_Modifier as Modifier, SlangUUID as UUID};
 
 macro_rules! vcall {
 	($self:expr, $method:ident($($args:expr),*)) => {
@@ -363,7 +356,7 @@ impl Metadata {
 		let mut used = false;
 		let result = vcall!(
 			self,
-			isParameterLocationUsed(category, space_index, register_index, &mut used)
+			isParameterLocationUsed(category.into_raw(), space_index, register_index, &mut used)
 		);
 		succeeded(result).then(|| used)
 	}
@@ -621,7 +614,7 @@ impl Default for TargetDesc<'_> {
 
 impl<'a> TargetDesc<'a> {
 	pub fn format(mut self, format: CompileTarget) -> Self {
-		self.inner.format = format;
+		self.inner.format = format as i32;
 		self
 	}
 
@@ -715,9 +708,9 @@ pub struct CompilerOptions {
 impl CompilerOptions {
 	fn push_ints(mut self, name: CompilerOptionName, i0: i32, i1: i32) -> Self {
 		self.options.push(sys::slang_CompilerOptionEntry {
-			name,
+			name: name,
 			value: sys::slang_CompilerOptionValue {
-				kind: sys::slang_CompilerOptionValueKind::Int,
+				kind: CompilerOptionValueKind::Int,
 				intValue0: i0,
 				intValue1: i1,
 				stringValue0: null(),
@@ -730,9 +723,9 @@ impl CompilerOptions {
 
 	fn push_strings(mut self, name: CompilerOptionName, s0: *const i8, s1: *const i8) -> Self {
 		self.options.push(sys::slang_CompilerOptionEntry {
-			name,
+			name: name,
 			value: sys::slang_CompilerOptionValue {
-				kind: sys::slang_CompilerOptionValueKind::String,
+				kind: CompilerOptionValueKind::String,
 				intValue0: 0,
 				intValue1: 0,
 				stringValue0: s0,
@@ -810,4 +803,746 @@ impl CompilerOptions {
 	// Experimental
 	option!(NoMangle, no_mangle(enable: bool));
 	option!(ValidateUniformity, validate_uniformity(enable: bool));
+}
+
+/// Option to control emission of `#line` directives
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum LineDirectiveMode {
+	Default = sys::SlangLineDirectiveMode_Default,
+
+	/// Emit GLSL-style directives with file number instead of name
+	Glsl = sys::SlangLineDirectiveMode_Glsl,
+
+	/// Don’t emit line directives at all.
+	None = sys::SlangLineDirectiveMode_None,
+
+	/// Use a source map to track line mappings (ie no #line will appear in emitting source)
+	SourceMap = sys::SlangLineDirectiveMode_SourceMap,
+
+	/// Emit standard C-style #line directives.
+	Standard = sys::SlangLineDirectiveMode_Standard,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum TypeKind {
+	None = sys::SlangTypeKind_None,
+	Struct = sys::SlangTypeKind_Struct,
+	Array = sys::SlangTypeKind_Array,
+	Matrix = sys::SlangTypeKind_Matrix,
+	Vector = sys::SlangTypeKind_Vector,
+	Scalar = sys::SlangTypeKind_Scalar,
+	ConstantBuffer = sys::SlangTypeKind_ConstantBuffer,
+	Resource = sys::SlangTypeKind_Resource,
+	SamplerState = sys::SlangTypeKind_SamplerState,
+	TextureBuffer = sys::SlangTypeKind_TextureBuffer,
+	ShaderStorageBuffer = sys::SlangTypeKind_ShaderStorageBuffer,
+	ParameterBlock = sys::SlangTypeKind_ParameterBlock,
+	GenericTypeParameter = sys::SlangTypeKind_GenericTypeParameter,
+	Interface = sys::SlangTypeKind_Interface,
+	OutputStream = sys::SlangTypeKind_OutputStream,
+	MeshOutput = sys::SlangTypeKind_MeshOutput,
+	Specialized = sys::SlangTypeKind_Specialized,
+	Feedback = sys::SlangTypeKind_Feedback,
+	Pointer = sys::SlangTypeKind_Pointer,
+	DynamicResource = sys::SlangTypeKind_DynamicResource,
+	Enum = sys::SlangTypeKind_Enum,
+}
+
+impl TypeKind {
+	fn from_raw(raw: sys::SlangTypeKind) -> Self {
+		match raw {
+			sys::SlangTypeKind_None => Self::None,
+			sys::SlangTypeKind_Struct => Self::Struct,
+			sys::SlangTypeKind_Array => Self::Array,
+			sys::SlangTypeKind_Matrix => Self::Matrix,
+			sys::SlangTypeKind_Vector => Self::Vector,
+			sys::SlangTypeKind_Scalar => Self::Scalar,
+			sys::SlangTypeKind_ConstantBuffer => Self::ConstantBuffer,
+			sys::SlangTypeKind_Resource => Self::Resource,
+			sys::SlangTypeKind_SamplerState => Self::SamplerState,
+			sys::SlangTypeKind_TextureBuffer => Self::TextureBuffer,
+			sys::SlangTypeKind_ShaderStorageBuffer => Self::ShaderStorageBuffer,
+			sys::SlangTypeKind_ParameterBlock => Self::ParameterBlock,
+			sys::SlangTypeKind_GenericTypeParameter => Self::GenericTypeParameter,
+			sys::SlangTypeKind_Interface => Self::Interface,
+			sys::SlangTypeKind_OutputStream => Self::OutputStream,
+			sys::SlangTypeKind_MeshOutput => Self::MeshOutput,
+			sys::SlangTypeKind_Specialized => Self::Specialized,
+			sys::SlangTypeKind_Feedback => Self::Feedback,
+			sys::SlangTypeKind_Pointer => Self::Pointer,
+			sys::SlangTypeKind_DynamicResource => Self::DynamicResource,
+			sys::SlangTypeKind_Enum => Self::Enum,
+			_ => unimplemented!(),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum ScalarType {
+	None = sys::SlangScalarType_None,
+	Void = sys::SlangScalarType_Void,
+	Bool = sys::SlangScalarType_Bool,
+	Int32 = sys::SlangScalarType_Int32,
+	Uint32 = sys::SlangScalarType_Uint32,
+	Int64 = sys::SlangScalarType_Int64,
+	Uint64 = sys::SlangScalarType_Uint64,
+	Float16 = sys::SlangScalarType_Float16,
+	Float32 = sys::SlangScalarType_Float32,
+	Float64 = sys::SlangScalarType_Float64,
+	Int8 = sys::SlangScalarType_Int8,
+	Uint8 = sys::SlangScalarType_Uint8,
+	Int16 = sys::SlangScalarType_Int16,
+	Uint16 = sys::SlangScalarType_Uint16,
+	Intptr = sys::SlangScalarType_Intptr,
+	Uintptr = sys::SlangScalarType_Uintptr,
+	Bfloat16 = sys::SlangScalarType_Bfloat16,
+	FloatE4m3 = sys::SlangScalarType_FloatE4m3,
+	FloatE5m2 = sys::SlangScalarType_FloatE5m2,
+}
+
+impl ScalarType {
+	fn from_raw(raw: sys::SlangScalarType) -> Self {
+		match raw {
+			sys::SlangScalarType_None => Self::None,
+			sys::SlangScalarType_Void => Self::Void,
+			sys::SlangScalarType_Bool => Self::Bool,
+			sys::SlangScalarType_Int32 => Self::Int32,
+			sys::SlangScalarType_Uint32 => Self::Uint32,
+			sys::SlangScalarType_Int64 => Self::Int64,
+			sys::SlangScalarType_Uint64 => Self::Uint64,
+			sys::SlangScalarType_Float16 => Self::Float16,
+			sys::SlangScalarType_Float32 => Self::Float32,
+			sys::SlangScalarType_Float64 => Self::Float64,
+			sys::SlangScalarType_Int8 => Self::Int8,
+			sys::SlangScalarType_Uint8 => Self::Uint8,
+			sys::SlangScalarType_Int16 => Self::Int16,
+			sys::SlangScalarType_Uint16 => Self::Uint16,
+			sys::SlangScalarType_Intptr => Self::Intptr,
+			sys::SlangScalarType_Uintptr => Self::Uintptr,
+			sys::SlangScalarType_Bfloat16 => Self::Bfloat16,
+			sys::SlangScalarType_FloatE4m3 => Self::FloatE4m3,
+			sys::SlangScalarType_FloatE5m2 => Self::FloatE5m2,
+			_ => unimplemented!(),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum MatrixLayoutMode {
+	ModeUnknown = sys::SlangMatrixLayoutMode_ModeUnknown,
+	RowMajor = sys::SlangMatrixLayoutMode_RowMajor,
+	ColumnMajor = sys::SlangMatrixLayoutMode_ColumnMajor,
+}
+
+impl MatrixLayoutMode {
+	fn from_raw(raw: sys::SlangMatrixLayoutMode) -> Self {
+		match raw {
+			sys::SlangMatrixLayoutMode_ModeUnknown => Self::ModeUnknown,
+			sys::SlangMatrixLayoutMode_RowMajor => Self::RowMajor,
+			sys::SlangMatrixLayoutMode_ColumnMajor => Self::ColumnMajor,
+			_ => unimplemented!(),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(i32)]
+#[non_exhaustive]
+pub enum CompileTarget {
+	Unknown = sys::SlangCompileTarget_TargetUnknown,
+	None = sys::SlangCompileTarget_TargetNone,
+	Glsl = sys::SlangCompileTarget_Glsl,
+	GlslVulkanDeprecated = sys::SlangCompileTarget_GlslVulkanDeprecated,
+	GlslVulkanOneDescDeprecated = sys::SlangCompileTarget_GlslVulkanOneDescDeprecated,
+	Hlsl = sys::SlangCompileTarget_Hlsl,
+	Spirv = sys::SlangCompileTarget_Spirv,
+	SpirvAsm = sys::SlangCompileTarget_SpirvAsm,
+	Dxbc = sys::SlangCompileTarget_Dxbc,
+	DxbcAsm = sys::SlangCompileTarget_DxbcAsm,
+	Dxil = sys::SlangCompileTarget_Dxil,
+	DxilAsm = sys::SlangCompileTarget_DxilAsm,
+	/// The C language
+	CSource = sys::SlangCompileTarget_CSource,
+	/// C++ code for shader kernels.
+	CppSource = sys::SlangCompileTarget_CppSource,
+	/// Standalone binary executable (for hosting CPU/OS)
+	HostExecutable = sys::SlangCompileTarget_HostExecutable,
+	/// A shared library/Dll for shader kernels (for hosting CPU/OS)
+	ShaderSharedLibrary = sys::SlangCompileTarget_ShaderSharedLibrary,
+	/// A CPU target that makes the compiled shader code available to be run immediately
+	ShaderHostCallable = sys::SlangCompileTarget_ShaderHostCallable,
+	/// Cuda source
+	CudaSource = sys::SlangCompileTarget_CudaSource,
+	/// PTX
+	Ptx = sys::SlangCompileTarget_Ptx,
+	/// Object code that contains CUDA functions.
+	CudaObjectCode = sys::SlangCompileTarget_CudaObjectCode,
+	/// Object code that can be used for later linking (kernel/shader)
+	ObjectCode = sys::SlangCompileTarget_ObjectCode,
+	/// C++ code for host library or executable.
+	HostCppSource = sys::SlangCompileTarget_HostCppSource,
+	/// Host callable host code (ie non kernel/shader)
+	HostHostCallable = sys::SlangCompileTarget_HostHostCallable,
+	/// C++ PyTorch binding code.
+	CppPytorchBinding = sys::SlangCompileTarget_CppPytorchBinding,
+	/// Metal shading language
+	Metal = sys::SlangCompileTarget_Metal,
+	/// Metal library
+	MetalLib = sys::SlangCompileTarget_MetalLib,
+	/// Metal library assembly
+	MetalLibAsm = sys::SlangCompileTarget_MetalLibAsm,
+	/// A shared library/Dll for host code (for hosting CPU/OS)
+	HostSharedLibrary = sys::SlangCompileTarget_HostSharedLibrary,
+	/// WebGPU shading language
+	Wgsl = sys::SlangCompileTarget_Wgsl,
+	/// SPIR-V assembly via WebGPU shading language
+	WgslSpirvAsm = sys::SlangCompileTarget_WgslSpirvAsm,
+	/// SPIR-V via WebGPU shading language
+	WgslSpirv = sys::SlangCompileTarget_WgslSpirv,
+	/// Bytecode that can be interpreted by the Slang VM
+	HostVm = sys::SlangCompileTarget_HostVm,
+	/// C++ header for shader kernels.
+	CppHeader = sys::SlangCompileTarget_CppHeader,
+	/// Cuda header
+	CudaHeader = sys::SlangCompileTarget_CudaHeader,
+	/// Host object code
+	HostObjectCode = sys::SlangCompileTarget_HostObjectCode,
+	/// Host LLVM IR assembly
+	HostLlvmIr = sys::SlangCompileTarget_HostLlvmIr,
+	/// Host LLVM IR assembly (kernel/shader)
+	ShaderLlvmIr = sys::SlangCompileTarget_ShaderLlvmIr,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum DebugInfoLevel {
+	/// Don't emit debug information at all.
+	None = sys::SlangDebugInfoLevel_None,
+
+	/// Emit as little debug information as possible, while still supporting stack trackers.
+	Minimal = sys::SlangDebugInfoLevel_Minimal,
+
+	/// Emit whatever is the standard level of debug information for each target.
+	Standard = sys::SlangDebugInfoLevel_Standard,
+
+	/// Emit as much debug information as possible for each target.
+	Maximal = sys::SlangDebugInfoLevel_Maximal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum OptimizationLevel {
+	/// Don't optimize at all.
+	None = sys::SlangOptimizationLevel_None,
+
+	/// Default optimization level: balance code quality and compilation time.
+	Default = sys::SlangOptimizationLevel_Default,
+
+	/// Optimize aggressively.
+	High = sys::SlangOptimizationLevel_High,
+
+	/// Include optimizations that may take a very long time, or may involve severe space-vs-speed tradeoffs
+	Maximal = sys::SlangOptimizationLevel_Maximal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum DeclKind {
+	UnsupportedForReflection = sys::SlangDeclKind_UnsupportedForReflection,
+	Struct = sys::SlangDeclKind_Struct,
+	Func = sys::SlangDeclKind_Func,
+	Module = sys::SlangDeclKind_Module,
+	Generic = sys::SlangDeclKind_Generic,
+	Variable = sys::SlangDeclKind_Variable,
+	Namespace = sys::SlangDeclKind_Namespace,
+	Enum = sys::SlangDeclKind_Enum,
+}
+
+impl DeclKind {
+	fn from_raw(raw: sys::SlangDeclKind) -> Self {
+		match raw {
+			sys::SlangDeclKind_UnsupportedForReflection => Self::UnsupportedForReflection,
+			sys::SlangDeclKind_Struct => Self::Struct,
+			sys::SlangDeclKind_Func => Self::Func,
+			sys::SlangDeclKind_Module => Self::Module,
+			sys::SlangDeclKind_Generic => Self::Generic,
+			sys::SlangDeclKind_Variable => Self::Variable,
+			sys::SlangDeclKind_Namespace => Self::Namespace,
+			sys::SlangDeclKind_Enum => Self::Enum,
+			_ => unimplemented!(),
+		}
+	}
+}
+
+/// Option to control floating-point precision guarantees for a target
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum FloatingPointMode {
+	Default = sys::SlangFloatingPointMode_Default,
+	Fast = sys::SlangFloatingPointMode_Fast,
+	Precise = sys::SlangFloatingPointMode_Precise,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum ImageFormat {
+	Unknown = sys::SlangImageFormat_SLANGIMAGEFORMATUnknown,
+	Rgba32f = sys::SlangImageFormat_SLANGIMAGEFORMATRgba32f,
+	Rgba16f = sys::SlangImageFormat_SLANGIMAGEFORMATRgba16f,
+	Rg32f = sys::SlangImageFormat_SLANGIMAGEFORMATRg32f,
+	Rg16f = sys::SlangImageFormat_SLANGIMAGEFORMATRg16f,
+	R11fG11fB10f = sys::SlangImageFormat_SLANGIMAGEFORMATR11fG11fB10f,
+	R32f = sys::SlangImageFormat_SLANGIMAGEFORMATR32f,
+	R16f = sys::SlangImageFormat_SLANGIMAGEFORMATR16f,
+	Rgba16 = sys::SlangImageFormat_SLANGIMAGEFORMATRgba16,
+	Rgb10A2 = sys::SlangImageFormat_SLANGIMAGEFORMATRgb10A2,
+	Rgba8 = sys::SlangImageFormat_SLANGIMAGEFORMATRgba8,
+	Rg16 = sys::SlangImageFormat_SLANGIMAGEFORMATRg16,
+	Rg8 = sys::SlangImageFormat_SLANGIMAGEFORMATRg8,
+	R16 = sys::SlangImageFormat_SLANGIMAGEFORMATR16,
+	R8 = sys::SlangImageFormat_SLANGIMAGEFORMATR8,
+	Rgba16Snorm = sys::SlangImageFormat_SLANGIMAGEFORMATRgba16Snorm,
+	Rgba8Snorm = sys::SlangImageFormat_SLANGIMAGEFORMATRgba8Snorm,
+	Rg16Snorm = sys::SlangImageFormat_SLANGIMAGEFORMATRg16Snorm,
+	Rg8Snorm = sys::SlangImageFormat_SLANGIMAGEFORMATRg8Snorm,
+	R16Snorm = sys::SlangImageFormat_SLANGIMAGEFORMATR16Snorm,
+	R8Snorm = sys::SlangImageFormat_SLANGIMAGEFORMATR8Snorm,
+	Rgba32i = sys::SlangImageFormat_SLANGIMAGEFORMATRgba32i,
+	Rgba16i = sys::SlangImageFormat_SLANGIMAGEFORMATRgba16i,
+	Rgba8i = sys::SlangImageFormat_SLANGIMAGEFORMATRgba8i,
+	Rg32i = sys::SlangImageFormat_SLANGIMAGEFORMATRg32i,
+	Rg16i = sys::SlangImageFormat_SLANGIMAGEFORMATRg16i,
+	Rg8i = sys::SlangImageFormat_SLANGIMAGEFORMATRg8i,
+	R32i = sys::SlangImageFormat_SLANGIMAGEFORMATR32i,
+	R16i = sys::SlangImageFormat_SLANGIMAGEFORMATR16i,
+	R8i = sys::SlangImageFormat_SLANGIMAGEFORMATR8i,
+	Rgba32ui = sys::SlangImageFormat_SLANGIMAGEFORMATRgba32ui,
+	Rgba16ui = sys::SlangImageFormat_SLANGIMAGEFORMATRgba16ui,
+	Rgb10A2ui = sys::SlangImageFormat_SLANGIMAGEFORMATRgb10A2ui,
+	Rgba8ui = sys::SlangImageFormat_SLANGIMAGEFORMATRgba8ui,
+	Rg32ui = sys::SlangImageFormat_SLANGIMAGEFORMATRg32ui,
+	Rg16ui = sys::SlangImageFormat_SLANGIMAGEFORMATRg16ui,
+	Rg8ui = sys::SlangImageFormat_SLANGIMAGEFORMATRg8ui,
+	R32ui = sys::SlangImageFormat_SLANGIMAGEFORMATR32ui,
+	R16ui = sys::SlangImageFormat_SLANGIMAGEFORMATR16ui,
+	R8ui = sys::SlangImageFormat_SLANGIMAGEFORMATR8ui,
+	R64ui = sys::SlangImageFormat_SLANGIMAGEFORMATR64ui,
+	R64i = sys::SlangImageFormat_SLANGIMAGEFORMATR64i,
+	Bgra8 = sys::SlangImageFormat_SLANGIMAGEFORMATBgra8,
+}
+
+impl ImageFormat {
+	fn from_raw(raw: sys::SlangImageFormat) -> Self {
+		match raw {
+			sys::SlangImageFormat_SLANGIMAGEFORMATUnknown => Self::Unknown,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRgba32f => Self::Rgba32f,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRgba16f => Self::Rgba16f,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRg32f => Self::Rg32f,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRg16f => Self::Rg16f,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR11fG11fB10f => Self::R11fG11fB10f,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR32f => Self::R32f,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR16f => Self::R16f,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRgba16 => Self::Rgba16,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRgb10A2 => Self::Rgb10A2,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRgba8 => Self::Rgba8,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRg16 => Self::Rg16,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRg8 => Self::Rg8,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR16 => Self::R16,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR8 => Self::R8,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRgba16Snorm => Self::Rgba16Snorm,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRgba8Snorm => Self::Rgba8Snorm,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRg16Snorm => Self::Rg16Snorm,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRg8Snorm => Self::Rg8Snorm,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR16Snorm => Self::R16Snorm,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR8Snorm => Self::R8Snorm,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRgba32i => Self::Rgba32i,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRgba16i => Self::Rgba16i,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRgba8i => Self::Rgba8i,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRg32i => Self::Rg32i,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRg16i => Self::Rg16i,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRg8i => Self::Rg8i,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR32i => Self::R32i,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR16i => Self::R16i,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR8i => Self::R8i,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRgba32ui => Self::Rgba32ui,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRgba16ui => Self::Rgba16ui,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRgb10A2ui => Self::Rgb10A2ui,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRgba8ui => Self::Rgba8ui,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRg32ui => Self::Rg32ui,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRg16ui => Self::Rg16ui,
+			sys::SlangImageFormat_SLANGIMAGEFORMATRg8ui => Self::Rg8ui,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR32ui => Self::R32ui,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR16ui => Self::R16ui,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR8ui => Self::R8ui,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR64ui => Self::R64ui,
+			sys::SlangImageFormat_SLANGIMAGEFORMATR64i => Self::R64i,
+			sys::SlangImageFormat_SLANGIMAGEFORMATBgra8 => Self::Bgra8,
+			_ => unimplemented!(),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum LayoutRules {
+	Default = sys::SlangLayoutRules_Default,
+	MetalArgumentBufferTier2 = sys::SlangLayoutRules_MetalArgumentBufferTier2,
+	DefaultStructuredBuffer = sys::SlangLayoutRules_DefaultStructuredBuffer,
+	DefaultConstantBuffer = sys::SlangLayoutRules_DefaultConstantBuffer,
+}
+
+/// Types of API-managed bindings that a parameter might use.
+///
+/// `BindingType` represents the distinct types of binding ranges that might be
+/// understood by an underlying graphics API or cross-API abstraction layer.
+/// Several of the enumeration cases here correspond to cases of `VkDescriptorType`
+/// defined by the Vulkan API. Note however that the values of this enumeration
+/// are not the same as those of any particular API.
+///
+/// The `BindingType` enumeration is distinct from `ParameterCategory`
+/// because `ParameterCategory` differentiates the types of parameters for
+/// the purposes of layout, where the layout rules of some targets will treat
+/// parameters of different types as occupying the same binding space for layout
+/// (e.g., in SPIR-V both a `Texture2D` and `SamplerState` use the same space of
+/// `binding` indices, and are not allowed to overlap), while those same types
+/// map to different types of bindings in the API (e.g., both textures and samplers
+/// use different `VkDescriptorType` values).
+///
+/// When you want to answer "what register/binding did this parameter use?" you
+/// should use `ParameterCategory`.
+///
+/// When you want to answer "what type of descriptor range should this parameter use?"
+/// you should use `BindingType`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum BindingType {
+	Unknown = sys::SlangBindingType_Unknown,
+	Sampler = sys::SlangBindingType_Sampler,
+	Texture = sys::SlangBindingType_Texture,
+	ConstantBuffer = sys::SlangBindingType_ConstantBuffer,
+	ParameterBlock = sys::SlangBindingType_ParameterBlock,
+	TypedBuffer = sys::SlangBindingType_TypedBuffer,
+	RawBuffer = sys::SlangBindingType_RawBuffer,
+	CombinedTextureSampler = sys::SlangBindingType_CombinedTextureSampler,
+	InputRenderTarget = sys::SlangBindingType_InputRenderTarget,
+	InlineUniformData = sys::SlangBindingType_InlineUniformData,
+	RayTracingAccelerationStructure = sys::SlangBindingType_RayTracingAccelerationStructure,
+	VaryingInput = sys::SlangBindingType_VaryingInput,
+	VaryingOutput = sys::SlangBindingType_VaryingOutput,
+	ExistentialValue = sys::SlangBindingType_ExistentialValue,
+	PushConstant = sys::SlangBindingType_PushConstant,
+	MutableTexture = sys::SlangBindingType_MutableTeture,
+	MutableTypedBuffer = sys::SlangBindingType_MutableTypedBuffer,
+	MutableRawBuffer = sys::SlangBindingType_MutableRawBuffer,
+}
+
+impl BindingType {
+	fn from_raw(raw: sys::SlangBindingType) -> Self {
+		match raw {
+			sys::SlangBindingType_Unknown => Self::Unknown,
+			sys::SlangBindingType_Sampler => Self::Sampler,
+			sys::SlangBindingType_Texture => Self::Texture,
+			sys::SlangBindingType_ConstantBuffer => Self::ConstantBuffer,
+			sys::SlangBindingType_ParameterBlock => Self::ParameterBlock,
+			sys::SlangBindingType_TypedBuffer => Self::TypedBuffer,
+			sys::SlangBindingType_RawBuffer => Self::RawBuffer,
+			sys::SlangBindingType_CombinedTextureSampler => Self::CombinedTextureSampler,
+			sys::SlangBindingType_InputRenderTarget => Self::InputRenderTarget,
+			sys::SlangBindingType_InlineUniformData => Self::InlineUniformData,
+			sys::SlangBindingType_RayTracingAccelerationStructure => {
+				Self::RayTracingAccelerationStructure
+			}
+			sys::SlangBindingType_VaryingInput => Self::VaryingInput,
+			sys::SlangBindingType_VaryingOutput => Self::VaryingOutput,
+			sys::SlangBindingType_ExistentialValue => Self::ExistentialValue,
+			sys::SlangBindingType_PushConstant => Self::PushConstant,
+			sys::SlangBindingType_MutableTeture => Self::MutableTexture,
+			sys::SlangBindingType_MutableTypedBuffer => Self::MutableTypedBuffer,
+			sys::SlangBindingType_MutableRawBuffer => Self::MutableRawBuffer,
+			_ => unimplemented!(),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum ParameterCategory {
+	None,
+	Mixed,
+	ConstantBuffer,
+	ShaderResource,
+	UnorderedAccess,
+	VaryingInput,
+	VaryingOutput,
+	SamplerState,
+	Uniform,
+	DescriptorTableSlot,
+	SpecializationConstant,
+	PushConstantBuffer,
+	RegisterSpace,
+	Generic,
+	RayPayload,
+	HitAttributes,
+	CallablePayload,
+	ShaderRecord,
+	ExistentialTypeParam,
+	ExistentialObjectParam,
+	SubElementRegisterSpace,
+	Subpass,
+	MetalArgumentBufferElement,
+	MetalAttribute,
+	MetalPayload,
+	MetalBuffer,
+	MetalTexture,
+	MetalSampler,
+}
+
+impl ParameterCategory {
+	fn from_raw(raw: sys::SlangParameterCategory) -> Self {
+		match raw {
+			sys::SlangParameterCategory_None => Self::None,
+			sys::SlangParameterCategory_Mixed => Self::Mixed,
+			sys::SlangParameterCategory_ConstantBuffer => Self::ConstantBuffer,
+			sys::SlangParameterCategory_ShaderResource => Self::ShaderResource,
+			sys::SlangParameterCategory_UnorderedAccess => Self::UnorderedAccess,
+			sys::SlangParameterCategory_VaryingInput => Self::VaryingInput,
+			sys::SlangParameterCategory_VaryingOutput => Self::VaryingOutput,
+			sys::SlangParameterCategory_SamplerState => Self::SamplerState,
+			sys::SlangParameterCategory_Uniform => Self::Uniform,
+			sys::SlangParameterCategory_DescriptorTableSlot => Self::DescriptorTableSlot,
+			sys::SlangParameterCategory_SpecializationConstant => Self::SpecializationConstant,
+			sys::SlangParameterCategory_PushConstantBuffer => Self::PushConstantBuffer,
+			sys::SlangParameterCategory_RegisterSpace => Self::RegisterSpace,
+			sys::SlangParameterCategory_Generic => Self::Generic,
+			sys::SlangParameterCategory_RayPayload => Self::RayPayload,
+			sys::SlangParameterCategory_HitAttributes => Self::HitAttributes,
+			sys::SlangParameterCategory_CallablePayload => Self::CallablePayload,
+			sys::SlangParameterCategory_ShaderRecord => Self::ShaderRecord,
+			sys::SlangParameterCategory_ExistentialTypeParam => Self::ExistentialTypeParam,
+			sys::SlangParameterCategory_ExistentialObjectParam => Self::ExistentialObjectParam,
+			sys::SlangParameterCategory_SubElementRegisterSpace => Self::SubElementRegisterSpace,
+			sys::SlangParameterCategory_Subpass => Self::Subpass,
+			sys::SlangParameterCategory_MetalArgumentBufferElement => {
+				Self::MetalArgumentBufferElement
+			}
+			sys::SlangParameterCategory_MetalAttribute => Self::MetalAttribute,
+			sys::SlangParameterCategory_MetalPayload => Self::MetalPayload,
+			_ => unimplemented!(),
+			// Would be unreachable:
+			// sys::SlangParameterCategory_MetalBuffer => Self::MetalBuffer,
+			// sys::SlangParameterCategory_MetalTexture => Self::MetalTexture,
+			// sys::SlangParameterCategory_MetalSampler => Self::MetalSampler,
+		}
+	}
+
+	fn into_raw(self) -> sys::SlangParameterCategory {
+		match self {
+			Self::None => sys::SlangParameterCategory_None,
+			Self::Mixed => sys::SlangParameterCategory_Mixed,
+			Self::ConstantBuffer => sys::SlangParameterCategory_ConstantBuffer,
+			Self::ShaderResource => sys::SlangParameterCategory_ShaderResource,
+			Self::UnorderedAccess => sys::SlangParameterCategory_UnorderedAccess,
+			Self::VaryingInput => sys::SlangParameterCategory_VaryingInput,
+			Self::VaryingOutput => sys::SlangParameterCategory_VaryingOutput,
+			Self::SamplerState => sys::SlangParameterCategory_SamplerState,
+			Self::Uniform => sys::SlangParameterCategory_Uniform,
+			Self::DescriptorTableSlot => sys::SlangParameterCategory_DescriptorTableSlot,
+			Self::SpecializationConstant => sys::SlangParameterCategory_SpecializationConstant,
+			Self::PushConstantBuffer => sys::SlangParameterCategory_PushConstantBuffer,
+			Self::RegisterSpace => sys::SlangParameterCategory_RegisterSpace,
+			Self::Generic => sys::SlangParameterCategory_Generic,
+			Self::RayPayload => sys::SlangParameterCategory_RayPayload,
+			Self::HitAttributes => sys::SlangParameterCategory_HitAttributes,
+			Self::CallablePayload => sys::SlangParameterCategory_CallablePayload,
+			Self::ShaderRecord => sys::SlangParameterCategory_ShaderRecord,
+			Self::ExistentialTypeParam => sys::SlangParameterCategory_ExistentialTypeParam,
+			Self::ExistentialObjectParam => sys::SlangParameterCategory_ExistentialObjectParam,
+			Self::SubElementRegisterSpace => sys::SlangParameterCategory_SubElementRegisterSpace,
+			Self::Subpass => sys::SlangParameterCategory_Subpass,
+			Self::MetalArgumentBufferElement => {
+				sys::SlangParameterCategory_MetalArgumentBufferElement
+			}
+			Self::MetalAttribute => sys::SlangParameterCategory_MetalAttribute,
+			Self::MetalPayload => sys::SlangParameterCategory_MetalPayload,
+			Self::MetalBuffer => sys::SlangParameterCategory_MetalBuffer,
+			Self::MetalTexture => sys::SlangParameterCategory_MetalTexture,
+			Self::MetalSampler => sys::SlangParameterCategory_MetalSampler,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum ResourceAccess {
+	None = sys::SlangResourceAccess_None,
+	Read = sys::SlangResourceAccess_Read,
+	ReadWrite = sys::SlangResourceAccess_ReadWrite,
+	RasterOrdered = sys::SlangResourceAccess_RasterOrdered,
+	Append = sys::SlangResourceAccess_Append,
+	Consume = sys::SlangResourceAccess_Consume,
+	Write = sys::SlangResourceAccess_Write,
+	Feedback = sys::SlangResourceAccess_Feedback,
+	Unknown = sys::SlangResourceAccess_Unknown,
+}
+
+impl ResourceAccess {
+	fn from_raw(raw: sys::SlangResourceAccess) -> Self {
+		match raw {
+			sys::SlangResourceAccess_None => Self::None,
+			sys::SlangResourceAccess_Read => Self::Read,
+			sys::SlangResourceAccess_ReadWrite => Self::ReadWrite,
+			sys::SlangResourceAccess_RasterOrdered => Self::RasterOrdered,
+			sys::SlangResourceAccess_Append => Self::Append,
+			sys::SlangResourceAccess_Consume => Self::Consume,
+			sys::SlangResourceAccess_Write => Self::Write,
+			sys::SlangResourceAccess_Feedback => Self::Feedback,
+			sys::SlangResourceAccess_Unknown => Self::Unknown,
+			_ => unimplemented!(),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(i32)]
+#[non_exhaustive]
+pub enum SourceLanguage {
+	Unknown = sys::SlangSourceLanguage_Unknown,
+	Slang = sys::SlangSourceLanguage_Slang,
+	Hlsl = sys::SlangSourceLanguage_Hlsl,
+	Glsl = sys::SlangSourceLanguage_Glsl,
+	C = sys::SlangSourceLanguage_C,
+	Cpp = sys::SlangSourceLanguage_Cpp,
+	Cuda = sys::SlangSourceLanguage_Cuda,
+	Spirv = sys::SlangSourceLanguage_Spirv,
+	Metal = sys::SlangSourceLanguage_Metal,
+	Wgsl = sys::SlangSourceLanguage_Wgsl,
+	Llvm = sys::SlangSourceLanguage_Llvm,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum Stage {
+	None = sys::SlangStage_None,
+	Vertex = sys::SlangStage_Vertex,
+	Hull = sys::SlangStage_Hull,
+	Domain = sys::SlangStage_Domain,
+	Geometry = sys::SlangStage_Geometry,
+	Fragment = sys::SlangStage_Fragment,
+	Compute = sys::SlangStage_Compute,
+	RayGeneration = sys::SlangStage_RayGeneration,
+	Intersection = sys::SlangStage_Intersection,
+	AnyHit = sys::SlangStage_AnyHit,
+	ClosestHit = sys::SlangStage_ClosestHit,
+	Miss = sys::SlangStage_Miss,
+	Callable = sys::SlangStage_Callable,
+	Mesh = sys::SlangStage_Mesh,
+	Amplification = sys::SlangStage_Amplification,
+	Dispatch = sys::SlangStage_Dispatch,
+}
+
+impl Stage {
+	pub const PIXEL: Self = Self::Fragment;
+
+	fn from_raw(raw: sys::SlangStage) -> Self {
+		match raw {
+			sys::SlangStage_None => Self::None,
+			sys::SlangStage_Vertex => Self::Vertex,
+			sys::SlangStage_Hull => Self::Hull,
+			sys::SlangStage_Domain => Self::Domain,
+			sys::SlangStage_Geometry => Self::Geometry,
+			sys::SlangStage_Fragment => Self::Fragment,
+			sys::SlangStage_Compute => Self::Compute,
+			sys::SlangStage_RayGeneration => Self::RayGeneration,
+			sys::SlangStage_Intersection => Self::Intersection,
+			sys::SlangStage_AnyHit => Self::AnyHit,
+			sys::SlangStage_ClosestHit => Self::ClosestHit,
+			sys::SlangStage_Miss => Self::Miss,
+			sys::SlangStage_Callable => Self::Callable,
+			sys::SlangStage_Mesh => Self::Mesh,
+			sys::SlangStage_Amplification => Self::Amplification,
+			sys::SlangStage_Dispatch => Self::Dispatch,
+			_ => unimplemented!(),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum ModifierID {
+	Shared = sys::SlangModifierID_SlangModifierShared,
+	NoDiff = sys::SlangModifierID_SlangModifierNoDiff,
+	Static = sys::SlangModifierID_SlangModifierStatic,
+	Const = sys::SlangModifierID_SlangModifierConst,
+	Export = sys::SlangModifierID_SlangModifierExport,
+	Extern = sys::SlangModifierID_SlangModifierExtern,
+	Differentiable = sys::SlangModifierID_SlangModifierDifferentiable,
+	Mutating = sys::SlangModifierID_SlangModifierMutating,
+	In = sys::SlangModifierID_SlangModifierIn,
+	Out = sys::SlangModifierID_SlangModifierOut,
+	Inout = sys::SlangModifierID_SlangModifierInout,
+}
+
+bitflags! {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResourceShape: u32 {
+	const BASE_MASK = sys::SlangResourceShape_SlangResourceBaseShapeMask;
+	const NONE = sys::SlangResourceShape_SlangResourceNone;
+	const TEXTURE1D = sys::SlangResourceShape_SlangTexture1d;
+	const TEXTURE2D = sys::SlangResourceShape_SlangTexture2d;
+	const TEXTURE3D = sys::SlangResourceShape_SlangTexture3d;
+	const TEXTURE_CUBE = sys::SlangResourceShape_SlangTextureCube;
+	const TEXTURE_BUFFER = sys::SlangResourceShape_SlangTextureBuffer;
+	const STRUCTURED_BUFFER = sys::SlangResourceShape_SlangStructuredBuffer;
+	const BYTE_ADDRESS_BUFFER = sys::SlangResourceShape_SlangByteAddressBuffer;
+	const UNKNOWN = sys::SlangResourceShape_SlangResourceUnknown;
+	const ACCELERATION_STRUCTURE = sys::SlangResourceShape_SlangAccelerationStructure;
+	const TEXTURE_SUBPASS = sys::SlangResourceShape_SlangTextureSubpass;
+	const EXT_MASK = sys::SlangResourceShape_SlangResourceExtShapeMask;
+	const TEXTURE_FEEDBACK_FLAG = sys::SlangResourceShape_SlangTextureFeedbackFlag;
+	const TEXTURE_SHADOW_FLAG = sys::SlangResourceShape_SlangTextureShadowFlag;
+	const TEXTURE_ARRAY_FLAG = sys::SlangResourceShape_SlangTextureArrayFlag;
+	const TEXTURE_MULTISAMPLE_FLAG = sys::SlangResourceShape_SlangTextureMultisampleFlag;
+	const TEXTURE_COMBINED_FLAG = sys::SlangResourceShape_SlangTextureCombinedFlag;
+	const TEXTURE1D_ARRAY = sys::SlangResourceShape_SlangTexture1dArray;
+	const TEXTURE2D_ARRAY = sys::SlangResourceShape_SlangTexture2dArray;
+	const TEXTURE_CUBE_ARRAY = sys::SlangResourceShape_SlangTextureCubeArray;
+	const TEXTURE2D_MULTISAMPLE = sys::SlangResourceShape_SlangTexture2dMultisample;
+	const TEXTURE2D_MULTISAMPLE_ARRAY = sys::SlangResourceShape_SlangTexture2dMultisampleArray;
+	const TEXTURE_SUBPASS_MULTISAMPLE = sys::SlangResourceShape_SlangTextureSubpassMultisample;
+}
 }

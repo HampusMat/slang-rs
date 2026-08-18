@@ -1,5 +1,5 @@
-use super::{Generic, Type, UserAttribute, Variable, rcall};
-use crate::{GlobalSession, Interface, Modifier, ModifierID, sys};
+use super::{rcall, Generic, Type, UserAttribute, Variable};
+use crate::{sys, GlobalSession, Interface, Modifier, ModifierID};
 
 #[repr(transparent)]
 pub struct Function(sys::SlangReflectionFunction);
@@ -51,7 +51,7 @@ impl Function {
 	}
 
 	pub fn find_modifier(&self, id: ModifierID) -> Option<&Modifier> {
-		rcall!(spReflectionFunction_FindModifier(self, id) as Option<&Modifier>)
+		rcall!(spReflectionFunction_FindModifier(self, id as u32) as Option<&Modifier>)
 	}
 
 	pub fn generic_container(&self) -> Option<&Generic> {

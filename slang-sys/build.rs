@@ -52,11 +52,10 @@ fn main() {
 				| bindgen::CodegenConfig::VARS,
 		)
 		.parse_callbacks(Box::new(ParseCallback {}))
-		.default_enum_style(bindgen::EnumVariation::Rust {
-			non_exhaustive: false,
-		})
-		.constified_enum("SlangProfileID")
-		.constified_enum("SlangCapabilityID")
+		.default_enum_style(bindgen::EnumVariation::Consts)
+		// These enums can be safely rustified since they're only created on the Rust side
+		.rustified_enum(".*CompilerOptionName")
+		.rustified_enum(".*CompilerOptionValueKind")
 		.vtable_generation(true)
 		.layout_tests(false)
 		.derive_copy(true)
@@ -88,14 +87,6 @@ impl bindgen::callbacks::ParseCallbacks for ParseCallback {
 		let new_variant_name = pascal_case_from_snake_case(original_variant_name);
 		let new_variant_name = new_variant_name.trim_start_matches(trim);
 		Some(new_variant_name.to_string())
-	}
-
-	#[cfg(feature = "serde")]
-	fn add_derives(&self, info: &bindgen::callbacks::DeriveInfo<'_>) -> Vec<String> {
-		if info.name.starts_with("Slang") && info.kind == bindgen::callbacks::TypeKind::Enum {
-			return vec!["serde::Serialize".into(), "serde::Deserialize".into()];
-		}
-		vec![]
 	}
 }
 
