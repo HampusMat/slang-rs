@@ -12,6 +12,7 @@ use std::ptr::{null, null_mut};
 pub(crate) use shader_slang_sys as sys;
 
 pub use sys::{
+	slang_CompilerOptionName as CompilerOptionName, slang_Modifier as Modifier,
 	SlangBindingType as BindingType, SlangCompileTarget as CompileTarget,
 	SlangDebugInfoLevel as DebugInfoLevel, SlangDeclKind as DeclKind,
 	SlangFloatingPointMode as FloatingPointMode, SlangImageFormat as ImageFormat,
@@ -21,8 +22,7 @@ pub use sys::{
 	SlangReflectionGenericArg as GenericArg, SlangReflectionGenericArgType as GenericArgType,
 	SlangResourceAccess as ResourceAccess, SlangResourceShape as ResourceShape,
 	SlangScalarType as ScalarType, SlangSourceLanguage as SourceLanguage, SlangStage as Stage,
-	SlangTypeKind as TypeKind, SlangUUID as UUID, slang_CompilerOptionName as CompilerOptionName,
-	slang_Modifier as Modifier,
+	SlangTypeKind as TypeKind, SlangUUID as UUID,
 };
 
 macro_rules! vcall {
@@ -221,6 +221,13 @@ impl GlobalSession {
 
 	pub fn build_tag_string(&self) -> &str {
 		let tag = vcall!(self, getBuildTagString());
+
+		assert_ne!(
+			tag,
+			null(),
+			"getBuildTagString should never return a null pointer"
+		);
+
 		unsafe { CStr::from_ptr(tag).to_str().unwrap() }
 	}
 }
@@ -559,32 +566,52 @@ impl Module {
 		(0..self.entry_point_count()).map(|i| self.entry_point_by_index(i).unwrap())
 	}
 
-	pub fn name(&self) -> &str {
+	pub fn name(&self) -> Option<&str> {
 		let name = vcall!(self, getName());
-		unsafe { CStr::from_ptr(name).to_str().unwrap() }
+
+		if name.is_null() {
+			return None;
+		}
+
+		Some(unsafe { CStr::from_ptr(name).to_str().unwrap() })
 	}
 
-	pub fn file_path(&self) -> &str {
+	pub fn file_path(&self) -> Option<&str> {
 		let path = vcall!(self, getFilePath());
-		unsafe { CStr::from_ptr(path).to_str().unwrap() }
+
+		if path.is_null() {
+			return None;
+		}
+
+		Some(unsafe { CStr::from_ptr(path).to_str().unwrap() })
 	}
 
-	pub fn unique_identity(&self) -> &str {
+	pub fn unique_identity(&self) -> Option<&str> {
 		let identity = vcall!(self, getUniqueIdentity());
-		unsafe { CStr::from_ptr(identity).to_str().unwrap() }
+
+		if identity.is_null() {
+			return None;
+		}
+
+		Some(unsafe { CStr::from_ptr(identity).to_str().unwrap() })
 	}
 
 	pub fn dependency_file_count(&self) -> i32 {
 		vcall!(self, getDependencyFileCount()) as i32
 	}
 
-	pub fn dependency_file_path(&self, index: i32) -> &str {
+	pub fn dependency_file_path(&self, index: i32) -> Option<&str> {
 		let path = vcall!(self, getDependencyFilePath(index as i32));
-		unsafe { CStr::from_ptr(path).to_str().unwrap() }
+
+		if path.is_null() {
+			return None;
+		}
+
+		Some(unsafe { CStr::from_ptr(path).to_str().unwrap() })
 	}
 
 	pub fn dependency_file_paths(&self) -> impl ExactSizeIterator<Item = &str> {
-		(0..self.dependency_file_count()).map(|i| self.dependency_file_path(i))
+		(0..self.dependency_file_count()).map(|i| self.dependency_file_path(i).unwrap())
 	}
 
 	pub fn module_reflection(&self) -> &reflection::Decl {
