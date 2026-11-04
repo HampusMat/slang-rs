@@ -39,13 +39,13 @@ impl Function {
 
 	pub fn find_user_attribute_by_name(
 		&self,
-		global_session: &GlobalSession,
+		global_session: &mut GlobalSession,
 		name: &str,
 	) -> Option<&UserAttribute> {
 		let name = std::ffi::CString::new(name).unwrap();
 		rcall!(spReflectionFunction_FindUserAttributeByName(
 			self,
-			global_session.0.as_ptr().cast::<sys::SlangSession>(),
+			(&raw mut *global_session).cast::<sys::SlangSession>(),
 			name.as_ptr()
 		) as Option<&UserAttribute>)
 	}

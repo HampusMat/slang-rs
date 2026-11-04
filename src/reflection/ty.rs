@@ -1,6 +1,6 @@
 use super::{rcall, Generic, UserAttribute, Variable};
 use crate::{
-	succeeded, sys, Blob, Error, IUnknown, ResourceAccess, ResourceShape, Result, ScalarType,
+	succeeded, sys, Blob, Error, ObjectRc, ResourceAccess, ResourceShape, Result, ScalarType,
 	TypeKind,
 };
 
@@ -91,17 +91,18 @@ impl Type {
 		rcall!(spReflectionType_GetName(self) as Option<&str>)
 	}
 
-	pub fn full_name(&self) -> Result<Blob> {
+	pub fn full_name(&self) -> Result<ObjectRc<Blob>> {
 		let mut name = std::ptr::null_mut();
+
 		let result = rcall!(spReflectionType_GetFullName(self, &mut name));
 
-		if succeeded(result) && !name.is_null() {
-			Ok(Blob(IUnknown(
-				std::ptr::NonNull::new(name as *mut _).unwrap(),
-			)))
-		} else {
-			Err(Error::Code(result))
+		if !succeeded(result) {
+			return Err(Error::Code(result));
 		}
+
+		Ok(ObjectRc(
+			std::ptr::NonNull::new(name).unwrap().cast::<Blob>(),
+		))
 	}
 
 	pub fn user_attribute_count(&self) -> u32 {
