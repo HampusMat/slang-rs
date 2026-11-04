@@ -144,6 +144,12 @@ impl<T: Interface> Drop for ObjectRc<T> {
 	}
 }
 
+#[cfg(feature = "stable_deref_trait")]
+unsafe impl<T: Interface> stable_deref_trait::StableDeref for ObjectRc<T> {}
+
+#[cfg(feature = "stable_deref_trait")]
+unsafe impl<T: Interface> stable_deref_trait::CloneStableDeref for ObjectRc<T> {}
+
 #[repr(transparent)]
 pub struct IUnknown(*mut <Self as Interface>::Vtable);
 
