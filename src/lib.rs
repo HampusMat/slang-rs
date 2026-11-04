@@ -22,9 +22,17 @@ use sys::{
 pub use sys::{slang_Modifier as Modifier, SlangUUID as UUID};
 
 macro_rules! vcall {
-	($self:expr, $method:ident($($args:expr),*)) => {
-		unsafe { ($self.vtable().$method)($self.as_raw(), $($args),*) }
+	($self: ident, $method:ident($($args:expr),*)) => {
+        vcall!($self as Self, $method($($args),*))
 	};
+
+	($self: ident as $interface: ident, $method:ident($($args:expr),*)) => {
+        unsafe {
+            let vtable = IUnknown::get_vtable::<$interface>(&$self.0);
+
+		    (vtable.$method)($self.0.as_ptr().cast(), $($args),*)
+        }
+    };
 }
 
 const fn uuid(uuid: u128) -> UUID {
@@ -105,23 +113,6 @@ pub unsafe trait Interface: Sized + Clone {
 	type Vtable;
 
 	const IID: UUID;
-
-	#[doc(hidden)]
-	#[inline(always)]
-	unsafe fn vtable(&self) -> &Self::Vtable {
-		unsafe { &**(self.as_raw() as *mut *mut Self::Vtable) }
-	}
-
-	#[doc(hidden)]
-	#[inline(always)]
-	unsafe fn as_raw<T>(&self) -> *mut T {
-		unsafe { std::mem::transmute_copy(self) }
-	}
-
-	fn as_unknown(&self) -> &IUnknown {
-		// SAFETY: It is always safe to treat an `Interface` as an `IUnknown`.
-		unsafe { std::mem::transmute(self) }
-	}
 }
 
 #[repr(transparent)]
@@ -132,16 +123,37 @@ unsafe impl Interface for IUnknown {
 	const IID: UUID = uuid(0x00000000_0000_0000_c000000000000046);
 }
 
+impl IUnknown {
+	unsafe fn get_vtable<InterfaceT: Interface>(&self) -> &InterfaceT::Vtable {
+		let vtable = self.0.as_ptr().cast::<*const InterfaceT::Vtable>();
+
+		unsafe { &**vtable }
+	}
+
+	fn as_ptr(&self) -> *mut std::ffi::c_void {
+		self.0.as_ptr()
+	}
+}
+
 impl Clone for IUnknown {
 	fn clone(&self) -> Self {
-		vcall!(self, ISlangUnknown_addRef());
+		let vtable = unsafe { IUnknown::get_vtable::<Self>(self) };
+
+		unsafe {
+			(vtable.ISlangUnknown_addRef)(self.0.as_ptr().cast::<sys::ISlangUnknown>());
+		}
+
 		Self(self.0)
 	}
 }
 
 impl Drop for IUnknown {
 	fn drop(&mut self) {
-		vcall!(self, ISlangUnknown_release());
+		let vtable = unsafe { IUnknown::get_vtable::<Self>(self) };
+
+		unsafe {
+			(vtable.ISlangUnknown_release)(self.0.as_ptr().cast::<sys::ISlangUnknown>());
+		}
 	}
 }
 
@@ -168,7 +180,7 @@ impl Blob {
 
 #[repr(transparent)]
 #[derive(Clone)]
-pub struct GlobalSession(IUnknown);
+pub struct GlobalSession(pub(crate) IUnknown);
 
 unsafe impl Interface for GlobalSession {
 	type Vtable = sys::IGlobalSessionVtable;
@@ -251,7 +263,9 @@ impl Session {
 			Err(Error::Blob(blob))
 		} else {
 			let module = Module(IUnknown(std::ptr::NonNull::new(module as *mut _).unwrap()));
-			unsafe { (module.as_unknown().vtable().ISlangUnknown_addRef)(module.as_raw()) };
+
+			vcall!(module as IUnknown, ISlangUnknown_addRef());
+
 			Ok(module)
 		}
 	}
@@ -284,7 +298,9 @@ impl Session {
 			Err(Error::Blob(blob))
 		} else {
 			let module = Module(IUnknown(std::ptr::NonNull::new(module as *mut _).unwrap()));
-			unsafe { (module.as_unknown().vtable().ISlangUnknown_addRef)(module.as_raw()) };
+
+			vcall!(module as IUnknown, ISlangUnknown_addRef());
+
 			Ok(module)
 		}
 	}
@@ -304,7 +320,7 @@ impl Session {
 			loadModuleFromIRBlob(
 				module_name.as_ptr(),
 				path.as_ptr(),
-				ir_blob.as_raw(),
+				ir_blob.0.as_ptr().cast::<sys::ISlangBlob>(),
 				&mut diagnostics
 			)
 		);
@@ -316,7 +332,9 @@ impl Session {
 			Err(Error::Blob(blob))
 		} else {
 			let module = Module(IUnknown(std::ptr::NonNull::new(module as *mut _).unwrap()));
-			unsafe { (module.as_unknown().vtable().ISlangUnknown_addRef)(module.as_raw()) };
+
+			vcall!(module as IUnknown, ISlangUnknown_addRef());
+
 			Ok(module)
 		}
 	}
