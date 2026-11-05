@@ -514,12 +514,6 @@ unsafe impl Interface for EntryPoint {
 	const IID: UUID = uuid(0x8f241361_f5bd_4ca0_a3ac02f7fa2402b8);
 }
 
-impl From<&EntryPoint> for &ComponentType {
-	fn from(value: &EntryPoint) -> Self {
-		unsafe { &*(&raw const *value).cast::<Self>() }
-	}
-}
-
 impl From<ObjectRc<EntryPoint>> for ObjectRc<ComponentType> {
 	fn from(value: ObjectRc<EntryPoint>) -> Self {
 		let new = Self(value.0.cast());
@@ -545,12 +539,6 @@ unsafe impl Interface for TypeConformance {
 	const IID: UUID = uuid(0x73eb3147_e544_41b5_b8f0a244df21940b);
 }
 
-impl From<&TypeConformance> for &ComponentType {
-	fn from(value: &TypeConformance) -> Self {
-		unsafe { &*(&raw const *value).cast::<Self>() }
-	}
-}
-
 impl From<ObjectRc<TypeConformance>> for ObjectRc<ComponentType> {
 	fn from(value: ObjectRc<TypeConformance>) -> Self {
 		let new = Self(value.0.cast());
@@ -567,12 +555,6 @@ pub struct Module(*mut <Self as Interface>::Vtable);
 unsafe impl Interface for Module {
 	type Vtable = sys::IModuleVtable;
 	const IID: UUID = uuid(0x0c720e64_8722_4d31_8990638a98b1c279);
-}
-
-impl From<&Module> for &ComponentType {
-	fn from(value: &Module) -> Self {
-		unsafe { &*(&raw const *value).cast::<Self>() }
-	}
 }
 
 impl From<ObjectRc<Module>> for ObjectRc<ComponentType> {
